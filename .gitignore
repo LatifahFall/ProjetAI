@@ -34,7 +34,7 @@ models/*.onnx
 *.pth
 
 # MLflow
-mlruns/
+# mlruns/ - gardé pour que Noufissa puisse y travailler et committer ses configs
 mlartifacts/
 
 # Logs

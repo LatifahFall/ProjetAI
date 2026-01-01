@@ -1,4 +1,4 @@
-# Python
+# --- SECTION EXISTANTE (Python & IA) ---
 __pycache__/
 *.py[cod]
 *$py.class
@@ -7,6 +7,7 @@ __pycache__/
 env/
 venv/
 ENV/
+App/venv/
 build/
 develop-eggs/
 dist/
@@ -22,7 +23,6 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-App/venv/
 
 # Modèles et données
 models/*.pt
@@ -35,41 +35,38 @@ models/*.onnx
 *.pth
 
 # MLflow
-# mlruns/ - gardé pour que Noufissa puisse y travailler et committer ses configs
 mlartifacts/
 
-# Logs
+# --- NOUVELLE SECTION : FRONTEND (React/Vite) ---
+node_modules/
+.vite/
+# Bloque les builds de production
+dist/
+# Bloque les fichiers de log npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- LOGS, OS & IDE ---
 logs/
 *.log
-
-# Variables d'environnement
 .env
 .env.local
 .env.dev
 .env.prod
 .env.*.local
-
-# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-
-# OS
 .DS_Store
 Thumbs.db
 desktop.ini
-
-# Jupyter Notebook
 .ipynb_checkpoints
-
-# Temporary files
 *.tmp
 *.temp
 .cache/
-
-# Secrets
 secrets/
 *.key
 *.pem

@@ -1,0 +1,107 @@
+/* Intégration du design de ta collègue avec optimisation pour ta Home Page */
+:root {
+  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  /* Couleurs de ta collègue avec support Mode Sombre/Clair */
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* On enlève le flex centré du body qui casserait ta Home Page */
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  /* On garde le fond clair par défaut pour ton design pro */
+  background-color: #ffffff;
+  color: #213547;
+}
+
+/* --- LE DÉGRADÉ DESIGN QUE TU AS DEMANDÉ --- */
+.bg-gradient-ocean {
+  background: linear-gradient(135deg, #646cff 0%, #535bf2 50%, #747bff 100%);
+  background-size: 200% 200%;
+  animation: gradientMove 10s ease infinite;
+}
+
+@keyframes gradientMove {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Style des liens fusionné */
+a {
+  font-weight: 500;
+  color: #646cff;
+  text-decoration: inherit;
+  transition: color 0.3s;
+}
+a:hover {
+  color: #535bf2;
+}
+
+/* Style des boutons fusionné */
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+/* Animations de logo de ta 2ème copine */
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+
+@keyframes logo-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .logo-react {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+/* Adaptation du conteneur Root pour ne pas tout centrer verticalement */
+#root {
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* Mode clair (Light Mode) forcé pour la page pro si besoin */
+@media (prefers-color-scheme: light) {
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+  }
+  button {
+    background-color: #f9f9f9;
+    color: #213547;
+    border-color: #eee;
+  }
+  button:hover {
+    border-color: #646cff;
+    background-color: #ffffff;
+  }
+}

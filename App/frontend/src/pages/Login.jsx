@@ -1,128 +1,91 @@
 import React, { useState } from 'react';
-import { Brain, Lock, Mail, ArrowRight, Github } from 'lucide-react';
+import { Brain, Lock, Mail, ArrowRight } from 'lucide-react';
+import { supabase } from '../lib/supabaseClient';
+import { useNavigate } from 'react-router-dom';
 
 const Login = () => {
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({ email: '', password: '' });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("Tentative de connexion :", formData);
-    // Ici tu ajouteras ton appel API vers ton backend Python
+    setLoading(true);
+
+    try {
+      // On cherche l'agent qui a cet email et ce mot de passe
+      const { data, error } = await supabase
+        .from('agents')
+        .select('*')
+        .eq('email', formData.email)
+        .eq('mot_de_passe', formData.password)
+        .single(); // On attend un seul résultat
+
+      if (error || !data) {
+        throw new Error("Email ou mot de passe incorrect");
+      }
+
+      console.log("Connecté avec succès :", data);
+      alert(`Bienvenue ${data.nom_complet} !`);
+      
+      // On stocke l'ID de l'agent dans le navigateur pour s'en souvenir
+      localStorage.setItem('agent_id', data.id);
+      
+      navigate('/'); // Retour à l'accueil ou vers un Dashboard
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 px-6 lg:px-8 relative">
-      
-      {/* Bouton Retour à l'accueil */}
       <div className="absolute top-8 left-8">
-        <button 
-          onClick={() => window.location.href = '/'}
-          className="flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-[#646cff] transition-colors"
-        >
+        <button onClick={() => navigate('/')} className="flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-[#646cff] transition-colors">
           ← Retour à l'accueil
         </button>
       </div>
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center mb-6">
-          <div className="w-16 h-16 bg-gradient-ocean rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200">
+          <div className="w-16 h-16 bg-[#646cff] rounded-2xl flex items-center justify-center shadow-lg">
             <Brain size={32} className="text-white" />
           </div>
         </div>
-        <h2 className="text-center text-3xl font-black tracking-tight text-gray-900">
-          Espace Agent
-        </h2>
-        <p className="mt-2 text-center text-sm text-gray-500 font-medium">
-          Accédez à vos analyses OCEAN en temps réel
-        </p>
+        <h2 className="text-center text-3xl font-black tracking-tight text-gray-900">Espace Agent</h2>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-10 px-8 shadow-2xl shadow-indigo-100 rounded-[2.5rem] border border-gray-100">
+        <div className="bg-white py-10 px-8 shadow-2xl rounded-[2.5rem] border border-gray-100">
           <form className="space-y-6" onSubmit={handleSubmit}>
-            
-            {/* Champ Email */}
             <div>
-              <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-2 ml-1">
-                Adresse Email Professionnelle
-              </label>
+              <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Email Professionnel</label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400">
-                  <Mail size={18} />
-                </div>
-                <input
-                  type="email"
-                  required
-                  className="block w-full pl-11 pr-4 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-[#646cff] focus:bg-white transition-all"
-                  placeholder="agent@entreprise.ai"
-                  onChange={(e) => setFormData({...formData, email: e.target.value})}
-                />
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center text-gray-400"><Mail size={18} /></div>
+                <input type="email" required className="block w-full pl-11 pr-4 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm" placeholder="agent@entreprise.ai"
+                  onChange={(e) => setFormData({...formData, email: e.target.value})} />
               </div>
             </div>
 
-            {/* Champ Mot de passe */}
             <div>
-              <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-2 ml-1">
-                Mot de passe
-              </label>
+              <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Mot de passe</label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400">
-                  <Lock size={18} />
-                </div>
-                <input
-                  type="password"
-                  required
-                  className="block w-full pl-11 pr-4 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-[#646cff] focus:bg-white transition-all"
-                  placeholder="••••••••"
-                  onChange={(e) => setFormData({...formData, password: e.target.value})}
-                />
-              </div>
-              <div className="mt-2 text-right">
-                <a href="#" className="text-xs font-bold text-[#646cff] hover:underline">Mot de passe oublié ?</a>
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center text-gray-400"><Lock size={18} /></div>
+                <input type="password" required className="block w-full pl-11 pr-4 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm" placeholder="••••••••"
+                  onChange={(e) => setFormData({...formData, password: e.target.value})} />
               </div>
             </div>
 
-            {/* Bouton de Connexion */}
-            <button
-              type="submit"
-              className="w-full flex justify-center items-center gap-2 py-4 px-4 rounded-2xl shadow-lg text-sm font-black text-white bg-gradient-ocean hover:scale-[1.02] active:scale-95 transition-all"
-            >
-              Se connecter
+            <button type="submit" disabled={loading} className="w-full flex justify-center items-center gap-2 py-4 px-4 rounded-2xl shadow-lg text-sm font-black text-white bg-[#646cff]">
+              {loading ? "Connexion..." : "Se connecter"}
               <ArrowRight size={18} />
             </button>
           </form>
-
-          {/* Séparateur */}
-          <div className="mt-8">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-100"></div>
-              </div>
-              <div className="relative flex justify-center text-xs uppercase font-bold">
-                <span className="bg-white px-4 text-gray-400">Ou continuer avec</span>
-              </div>
-            </div>
-
-            <div className="mt-6 flex justify-center">
-              <button className="flex items-center gap-3 px-8 py-3 border border-gray-100 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all">
-                <Github size={20} />
-                GitHub Enterprise
-              </button>
-            </div>
-          </div>
         </div>
-        
-        {/* LIEN VERS L'INSCRIPTION */}
-        <p className="mt-8 text-center text-xs text-gray-400 font-medium">
-          Nouveau chez Ocean Insight ?{' '}
-          <button 
-            onClick={() => window.location.href = '/register'} 
-            className="text-[#646cff] font-bold hover:underline"
-          >
-            Créer un compte entreprise
-          </button>
+        <p className="mt-8 text-center text-xs text-gray-400">
+          Nouveau ? <button onClick={() => navigate('/register')} className="text-[#646cff] font-bold">Créer un compte</button>
         </p>
-
       </div>
     </div>
   );

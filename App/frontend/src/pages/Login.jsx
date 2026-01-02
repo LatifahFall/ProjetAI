@@ -31,7 +31,7 @@ const Login = () => {
       // On stocke l'ID de l'agent dans le navigateur pour s'en souvenir
       localStorage.setItem('agent_id', data.id);
       
-      navigate('/'); // Retour à l'accueil ou vers un Dashboard
+      navigate('/dashboard'); // Retour à l'accueil ou vers un Dashboard
     } catch (error) {
       alert(error.message);
     } finally {

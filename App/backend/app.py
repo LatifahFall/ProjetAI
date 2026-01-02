@@ -11,7 +11,7 @@ app = Flask(__name__)
 CORS(app)
 
 # --- Configuration des chemins ---
-BASE_MODEL_PATH = '/Users/noufissazidane/Desktop/AI_Audio2perso/ProjetAI/models'
+BASE_MODEL_PATH = 'E:\Projets\ProjetAI\models'
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 

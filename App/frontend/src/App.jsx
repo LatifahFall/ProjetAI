@@ -5,6 +5,10 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import CapturePage from './pages/CapturePage';
+import Dashboard from "./pages/Dashboard";
+import History from "./pages/History";
+import Stats from "./pages/Stats";
+
 
 function App() {
   
@@ -35,6 +39,10 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/capture" element={<CapturePage />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/history" element={<History />} />
+        <Route path="/stats" element={<Stats />} />
+
       </Routes>
     </Router>
   );

@@ -3,9 +3,11 @@ import { Mic, Square, Upload, Trash2, Send, FileAudio, Sparkles, Activity, UserP
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { supabase } from '../lib/supabaseClient';
+import { useNavigate } from "react-router-dom";
 
 const CapturePage = () => {
   const agentId = localStorage.getItem('agent_id');
+  const navigate = useNavigate();
 
   // --- ÉTATS ---
   const [isRecording, setIsRecording] = useState(false);
@@ -20,6 +22,13 @@ const CapturePage = () => {
   const [selectedClient, setSelectedClient] = useState(null);
   const [clients, setClients] = useState([]);
   const [newClient, setNewClient] = useState({ nom: '', email: '', telephone: '' });
+
+
+  useEffect(() => {
+    if (!agentId) {
+      window.location.href = "/login";
+    }
+  }, [agentId]);
 
   // 1. Charger les clients au démarrage
   useEffect(() => {
@@ -113,31 +122,74 @@ const CapturePage = () => {
 
   // --- ENVOI AU BACKEND (FLASK) ---
   const sendToBackend = async () => {
-    if (!selectedClient) return alert("Veuillez sélectionner un client");
-    if (!fileToUpload) return alert("Veuillez capturer ou importer un audio");
+  if (!selectedClient) {
+    alert("Veuillez sélectionner un client");
+    return;
+  }
 
-    setIsAnalyzing(true);
-    const formData = new FormData();
-    // On s'assure d'envoyer un nom de fichier cohérent
-    formData.append('audio_file', fileToUpload, "capture_audio.wav");
-    formData.append('client_id', selectedClient.id);
-    
-    try {
-      // Utilisation de 127.0.0.1 pour éviter les problèmes de résolution localhost sur Mac
-      const response = await axios.post('http://127.0.0.1:5000/predict', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+  if (!fileToUpload) {
+    alert("Veuillez capturer ou importer un audio");
+    return;
+  }
 
-      console.log("Réponse Backend:", response.data);
-      alert(`Analyse réussie pour ${selectedClient.nom} ! ${response.data.nombre_segments} segments créés.`);
-      
-    } catch (error) { 
-      console.error("Erreur détaillée:", error);
-      alert(error.response?.data?.error || "Erreur de connexion au serveur Flask (vérifiez qu'il tourne sur le port 5000)"); 
-    } finally { 
-      setIsAnalyzing(false); 
+  if (!agentId) {
+    alert("Agent non connecté");
+    return;
+  }
+
+  setIsAnalyzing(true);
+
+  const formData = new FormData();
+  formData.append("audio_file", fileToUpload, "capture_audio.wav");
+
+  try {
+    // 1️⃣ Appel IA (Flask)
+    const response = await axios.post(
+      "http://127.0.0.1:5000/predict",
+      formData,
+      { headers: { "Content-Type": "multipart/form-data" } }
+    );
+
+    console.log("Réponse Backend:", response.data);
+
+    // 2️⃣ ENREGISTREMENT DANS SUPABASE ✅
+   const { error } = await supabase.from("analyses").insert([
+  {
+    client_id: selectedClient.id,
+    transcription: response.data.transcription,
+
+    score_o: response.data.traits.Openness,
+    score_c: response.data.traits.Conscientiousness,
+    score_e: response.data.traits.Extraversion,
+    score_a: response.data.traits.Agreeableness,
+    score_n: response.data.traits.Neuroticism,
+
+    commentaire_ia: "Analyse automatique"
+  }
+]);
+    if (error) {
+      console.error("❌ Erreur insertion analyses :", error.message);
+      alert("Erreur lors de l'enregistrement de l'analyse");
+      return;
     }
-  };
+
+    if (error) {
+      console.error("Erreur Supabase :", error);
+      alert("❌ Supabase: " + error.message);
+      return;
+    }
+
+
+    alert("✅ Analyse enregistrée avec succès !");
+    navigate("/stats");
+    } catch (error) {
+      console.error("Erreur globale :", error);
+      alert("❌ Erreur lors de l'analyse");
+    } finally {
+      setIsAnalyzing(false);
+    }
+};
+
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center p-6 font-sans relative overflow-hidden bg-[#fdfeff]">

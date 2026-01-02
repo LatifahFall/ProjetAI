@@ -6,6 +6,8 @@ import torchaudio
 import torchaudio.transforms as T
 import numpy as np
 import opensmile
+import subprocess
+
 from flask import Blueprint, request, jsonify, current_app
 from transformers import AutoModel, AutoTokenizer
 
@@ -85,8 +87,31 @@ def predict():
         return jsonify({"error": "Aucun fichier audio reçu"}), 400
     
     audio_file = request.files['audio_file']
-    temp_path = os.path.join(current_app.config['UPLOAD_FOLDER'], "current_capture.wav")
-    audio_file.save(temp_path)
+    upload_dir = current_app.config['UPLOAD_FOLDER']
+
+    raw_path = os.path.join(upload_dir, "raw_audio")
+    wav_path = os.path.join(upload_dir, "current_capture.wav")
+
+    # 1. Sauvegarde brute (format navigateur)
+    audio_file.save(raw_path)
+
+    # 2. Conversion forcée en WAV PCM 16kHz
+    subprocess.run(
+        [
+            "ffmpeg", "-y",
+            "-i", raw_path,
+            "-ac", "1",
+            "-ar", "16000",
+            "-f", "wav",
+            wav_path
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=True
+    )
+
+    temp_path = wav_path  # IMPORTANT
+
 
     print("\n⚡ ANALYSE MULTIMODALE V5 EN COURS...")
 
@@ -168,4 +193,6 @@ def predict():
         print(f"❌ Erreur: {str(e)}")
         return jsonify({"error": str(e)}), 500
     finally:
-        if os.path.exists(temp_path): os.remove(temp_path)
+        for f in [raw_path, wav_path]:
+            if os.path.exists(f):
+                os.remove(f)

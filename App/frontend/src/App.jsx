@@ -1,41 +1,33 @@
-import { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { supabase } from './lib/supabaseClient'; // Import du client configuré
-import Home from './pages/Home';
-import Login from './pages/Login';
-import Register from './pages/Register';
+// src/App.jsx
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
-function App() {
-  
-  // Test de connexion automatique au lancement
-  useEffect(() => {
-    const checkConnection = async () => {
-      try {
-        // On essaie de lire la table agents (même si elle est vide)
-        const { data, error } = await supabase.from('agents').select('id').limit(1);
-        
-        if (error) {
-          console.warn("⚠️ Statut Supabase :", error.message);
-        } else {
-          console.log("✅ Supabase est connecté avec succès !");
-        }
-      } catch (err) {
-        console.error("❌ Erreur critique de configuration :", err);
-      }
-    };
+import Home from "./pages/Home";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
 
-    checkConnection();
-  }, []);
+import Dashboard from "./pages/Dashboard";
+import Clients from "./pages/Clients";
+import ClientDetails from "./pages/ClientDetails";
+import NewRecording from "./pages/NewRecording";
 
+export default function App() {
   return (
     <Router>
       <Routes>
         <Route path="/" element={<Home />} />
+
+        {/* Auth (optionnel pour plus tard) */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+
+        {/* DASHBOARD ACCESS LIBRE */}
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/clients" element={<Clients />} />
+        <Route path="/clients/:id" element={<ClientDetails />} />
+        <Route path="/clients/:id/new" element={<NewRecording />} />
+
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </Router>
   );
 }
-
-export default App;

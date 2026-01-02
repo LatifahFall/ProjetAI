@@ -70,4 +70,5 @@ desktop.ini
 secrets/
 *.key
 *.pem
+uploads/
 

@@ -1,0 +1,171 @@
+import os
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torchaudio
+import torchaudio.transforms as T
+import numpy as np
+import opensmile
+from flask import Blueprint, request, jsonify, current_app
+from transformers import AutoModel, AutoTokenizer
+
+predict_bp = Blueprint('predict', __name__)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ARCHITECTURES EXACTES (Copie conforme du code d'entraînement)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class WavLMRegressionHead(nn.Module):
+    def __init__(self, model_name="microsoft/wavlm-base-plus", n_traits=5):
+        super().__init__()
+        self.wavlm = AutoModel.from_pretrained(model_name)
+        hidden_size = self.wavlm.config.hidden_size
+        self.regressor = nn.Sequential(
+            nn.Linear(hidden_size * 2, 512),
+            nn.LayerNorm(512),
+            nn.GELU(),
+            nn.Dropout(0.3),
+            nn.Linear(512, 256),
+            nn.LayerNorm(256),
+            nn.GELU(),
+            nn.Dropout(0.2),
+            nn.Linear(256, n_traits)
+        )
+    
+    def forward(self, waveform):
+        outputs = self.wavlm(waveform)
+        hidden = outputs.last_hidden_state
+        mean_pool = hidden.mean(dim=1)
+        std_pool = hidden.std(dim=1)
+        pooled = torch.cat([mean_pool, std_pool], dim=1)
+        # Note: Dans le code d'entraînement, ils utilisent le regressor pour la prédiction
+        # Mais pour l'extraction de features pure, on s'arrête souvent avant.
+        # Ici, on va retourner les features concaténées pour le scaler.
+        return pooled
+
+class BERTRegressionHead(nn.Module):
+    def __init__(self, model_name="bert-base-uncased", n_traits=5):
+        super().__init__()
+        self.bert = AutoModel.from_pretrained(model_name)
+        hidden_size = self.bert.config.hidden_size
+        self.regressor = nn.Sequential(
+            nn.Linear(hidden_size, 512),
+            nn.LayerNorm(512),
+            nn.GELU(),
+            nn.Dropout(0.2),
+            nn.Linear(512, 256),
+            nn.LayerNorm(256),
+            nn.GELU(),
+            nn.Dropout(0.1),
+            nn.Linear(256, n_traits)
+        )
+    
+    def forward(self, input_ids, attention_mask):
+        outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
+        token_emb = outputs.last_hidden_state
+        mask_expanded = attention_mask.unsqueeze(-1).expand(token_emb.size()).float()
+        sum_emb = torch.sum(token_emb * mask_expanded, 1)
+        sum_mask = torch.clamp(mask_expanded.sum(1), min=1e-9)
+        pooled = sum_emb / sum_mask
+        return pooled
+
+# Initialisation OpenSMILE
+smile = opensmile.Smile(
+    feature_set=opensmile.FeatureSet.eGeMAPSv02,
+    feature_level=opensmile.FeatureLevel.Functionals
+)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ROUTE DE PRÉDICTION
+# ══════════════════════════════════════════════════════════════════════════════
+
+@predict_bp.route('/predict', methods=['POST'])
+def predict():
+    if 'audio_file' not in request.files:
+        return jsonify({"error": "Aucun fichier audio reçu"}), 400
+    
+    audio_file = request.files['audio_file']
+    temp_path = os.path.join(current_app.config['UPLOAD_FOLDER'], "current_capture.wav")
+    audio_file.save(temp_path)
+
+    print("\n⚡ ANALYSE MULTIMODALE V5 EN COURS...")
+
+    try:
+        # 1. WHISPER (Transcription)
+        print("📝 Step 1: Whisper Transcription...")
+        transcription = current_app.whisper_model.transcribe(temp_path)["text"]
+        print(f"   > '{transcription[:50]}...'")
+
+        # 2. OPENSMILE (88 features)
+        print("📊 Step 2: OpenSMILE Extraction...")
+        smile_feats = smile.process_file(temp_path).values
+        
+        # 3. WAVLM (Prétraitement identique à WavLMFineTuneDataset)
+        print("🔊 Step 3: WavLM Processing...")
+        waveform, sr = torchaudio.load(temp_path)
+        if sr != 16000:
+            waveform = T.Resample(sr, 16000)(waveform)
+        if waveform.shape[0] > 1:
+            waveform = waveform.mean(dim=0, keepdim=True)
+        
+        # Troncature/Padding 15s
+        max_samples = 16000 * 15
+        if waveform.shape[1] > max_samples:
+            waveform = waveform[:, :max_samples]
+        else:
+            waveform = F.pad(waveform, (0, max_samples - waveform.shape[1]))
+        
+        # Normalisation signal
+        waveform = (waveform - waveform.mean()) / (waveform.std() + 1e-8)
+        
+        with torch.no_grad():
+            wavlm_input = waveform.to(current_app.device)
+            # On appelle l'architecture custom
+            wavlm_raw = current_app.wavlm_model(wavlm_input).cpu().numpy()
+
+        # 4. BERT (Prétraitement identique à BERTFineTuneDataset)
+        print("📖 Step 4: BERT Processing...")
+        inputs = current_app.bert_tokenizer(
+            transcription, 
+            max_length=512, 
+            padding='max_length', 
+            truncation=True, 
+            return_tensors='pt'
+        ).to(current_app.device)
+        
+        with torch.no_grad():
+            bert_raw = current_app.bert_model(
+                input_ids=inputs['input_ids'], 
+                attention_mask=inputs['attention_mask']
+            ).cpu().numpy()
+
+        # 5. NORMALISATION (SCALERS)
+        print("⚖️  Step 5: Scaling Features...")
+        wav_scaled = current_app.scalers['wavlm'].transform(wavlm_raw)
+        smile_scaled = current_app.scalers['opensmile'].transform(smile_feats)
+        bert_scaled = current_app.scalers['bert'].transform(bert_raw)
+
+        # 6. CONCATÉNATION
+        X_combined = np.concatenate([wav_scaled, smile_scaled, bert_scaled], axis=1)
+        print(f"✅ Pipeline Terminé. Vecteur final: {X_combined.shape}")
+
+        # Pour l'instant, on renvoie les infos de succès. 
+        # (Si vous avez le classifieur final, on l'ajoutera ici)
+        return jsonify({
+            "status": "success",
+            "transcription": transcription,
+            "traits": {
+                "Extraversion": 0.0, 
+                "Agreeableness": 0.0, 
+                "Conscientiousness": 0.0, 
+                "Neuroticism": 0.0, 
+                "Openness": 0.0
+            },
+            "debug": {"shape": str(X_combined.shape)}
+        })
+
+    except Exception as e:
+        print(f"❌ Erreur: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if os.path.exists(temp_path): os.remove(temp_path)

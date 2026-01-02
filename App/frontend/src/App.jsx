@@ -4,6 +4,7 @@ import { supabase } from './lib/supabaseClient'; // Import du client configuré
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import CapturePage from './pages/CapturePage';
 
 function App() {
   
@@ -33,6 +34,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/capture" element={<CapturePage />} />
       </Routes>
     </Router>
   );

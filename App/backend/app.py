@@ -14,7 +14,8 @@ CORS(app)
 # --- Configuration des chemins ---
 # Chemin relatif vers le dossier models à la racine du projet
 BASE_DIR = Path(__file__).parent.parent.parent  # Remonte jusqu'à la racine du projet
-BASE_MODEL_PATH = str(BASE_DIR / 'models')
+# Permettre la surcharge via variable d'environnement (utile en Docker)
+BASE_MODEL_PATH = os.environ.get('BASE_MODEL_PATH', str(BASE_DIR / 'models'))
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -153,5 +154,7 @@ else:
 if __name__ == '__main__':
     if not os.path.exists(app.config['UPLOAD_FOLDER']):
         os.makedirs(app.config['UPLOAD_FOLDER'])
-    print("\n[OK] Serveur Flask pret sur http://127.0.0.1:5000")
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    host = '0.0.0.0'
+    print(f"\n[OK] Serveur Flask pret sur http://{host}:{port}")
+    app.run(debug=True, host=host, port=port)

@@ -113,20 +113,20 @@ def predict():
     temp_path = wav_path  # IMPORTANT
 
 
-    print("\n⚡ ANALYSE MULTIMODALE V5 EN COURS...")
+    print("\n[*] ANALYSE MULTIMODALE V5 EN COURS...")
 
     try:
         # 1. WHISPER (Transcription)
-        print("📝 Step 1: Whisper Transcription...")
+        print("[*] Step 1: Whisper Transcription...")
         transcription = current_app.whisper_model.transcribe(temp_path)["text"]
         print(f"   > '{transcription[:50]}...'")
 
         # 2. OPENSMILE (88 features)
-        print("📊 Step 2: OpenSMILE Extraction...")
+        print("[*] Step 2: OpenSMILE Extraction...")
         smile_feats = smile.process_file(temp_path).values
         
-        # 3. WAVLM (Prétraitement identique à WavLMFineTuneDataset)
-        print("🔊 Step 3: WavLM Processing...")
+        # 3. WAVLM (Pretraitement identique a WavLMFineTuneDataset)
+        print("[*] Step 3: WavLM Processing...")
         waveform, sr = torchaudio.load(temp_path)
         if sr != 16000:
             waveform = T.Resample(sr, 16000)(waveform)
@@ -148,8 +148,8 @@ def predict():
             # On appelle l'architecture custom
             wavlm_raw = current_app.wavlm_model(wavlm_input).cpu().numpy()
 
-        # 4. BERT (Prétraitement identique à BERTFineTuneDataset)
-        print("📖 Step 4: BERT Processing...")
+        # 4. BERT (Pretraitement identique a BERTFineTuneDataset)
+        print("[*] Step 4: BERT Processing...")
         inputs = current_app.bert_tokenizer(
             transcription, 
             max_length=512, 
@@ -165,14 +165,14 @@ def predict():
             ).cpu().numpy()
 
         # 5. NORMALISATION (SCALERS)
-        print("⚖️  Step 5: Scaling Features...")
+        print("[*] Step 5: Scaling Features...")
         wav_scaled = current_app.scalers['wavlm'].transform(wavlm_raw)
         smile_scaled = current_app.scalers['opensmile'].transform(smile_feats)
         bert_scaled = current_app.scalers['bert'].transform(bert_raw)
 
-        # 6. CONCATÉNATION
+        # 6. CONCATENATION
         X_combined = np.concatenate([wav_scaled, smile_scaled, bert_scaled], axis=1)
-        print(f"✅ Pipeline Terminé. Vecteur final: {X_combined.shape}")
+        print(f"[OK] Pipeline Termine. Vecteur final: {X_combined.shape}")
 
         # Pour l'instant, on renvoie les infos de succès. 
         # (Si vous avez le classifieur final, on l'ajoutera ici)
@@ -190,7 +190,7 @@ def predict():
         })
 
     except Exception as e:
-        print(f"❌ Erreur: {str(e)}")
+        print(f"[ERROR] Erreur: {str(e)}")
         return jsonify({"error": str(e)}), 500
     finally:
         for f in [raw_path, wav_path]:

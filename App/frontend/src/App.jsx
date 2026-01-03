@@ -8,6 +8,8 @@ import CapturePage from './pages/CapturePage';
 import Dashboard from "./pages/Dashboard";
 import History from "./pages/History";
 import Stats from "./pages/Stats";
+import Clients from "./pages/Clients";
+import ClientProfile from "./pages/ClientProfile";
 
 
 function App() {
@@ -42,6 +44,8 @@ function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/history" element={<History />} />
         <Route path="/stats" element={<Stats />} />
+        <Route path="/clients" element={<Clients />} />
+        <Route path="/client-profile" element={<ClientProfile />} />
 
       </Routes>
     </Router>

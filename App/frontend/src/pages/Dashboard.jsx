@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Mic, History, BarChart3 } from "lucide-react";
+import { Mic, History, BarChart3, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const Dashboard = () => {
@@ -18,11 +18,18 @@ const Dashboard = () => {
         Dashboard Agent
       </h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <Card
+          icon={<Users size={36} />}
+          title="Gestion Clients"
+          desc="Créer et gérer vos clients"
+          onClick={() => navigate("/clients")}
+        />
+
         <Card
           icon={<Mic size={36} />}
           title="Enregistrer un audio"
-          desc="Capturer et analyser la voix d’un client"
+          desc="Capturer et analyser la voix d'un client"
           onClick={() => navigate("/capture")}
         />
 

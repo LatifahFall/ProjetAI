@@ -117,7 +117,7 @@ const CapturePage = () => {
     }
   };
 
-  // --- ENVOI AU BACKEND (FLASK) ---
+// --- ENVOI AU BACKEND (FLASK / HUGGING FACE) ---
   const sendToBackend = async () => {
     if (!selectedClient || !fileToUpload) return;
 
@@ -126,7 +126,9 @@ const CapturePage = () => {
     formData.append("audio_file", fileToUpload, "capture_audio.wav");
 
     try {
-      const response = await axios.post("http://127.0.0.1:5000/predict", formData);
+      // On utilise la variable d'environnement au lieu de l'adresse locale
+      const apiUrl = import.meta.env.VITE_API_URL;
+      const response = await axios.post(`${apiUrl}/predict`, formData);
 
       const { error } = await supabase.from("analyses").insert([
         {
@@ -140,11 +142,13 @@ const CapturePage = () => {
           commentaire_ia: "Analyse multimodale automatique"
         }
       ]);
-
+      
       if (error) throw error;
-      navigate("/stats");
-    } catch (error) {
-      console.error("Analyse échouée", error);
+      // Optionnel : ajouter une notification de succès ici
+      
+    } catch (err) {
+      console.error("Erreur lors de l'analyse :", err);
+      // Optionnel : setIsError(true) pour afficher un message à l'utilisateur
     } finally {
       setIsAnalyzing(false);
     }

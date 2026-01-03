@@ -26,10 +26,28 @@ torch.serialization.add_safe_globals(safe_globals)
 
 app = Flask(__name__)
 CORS(app)
+app.config["UPLOAD_FOLDER"] = os.environ.get("UPLOAD_FOLDER", "uploads")
 
 
-BASE_DIR = Path(__file__).parent.parent.parent
-BASE_MODEL_PATH = str(BASE_DIR / 'models')
+
+BASE_MODEL_PATH = os.environ.get(
+    "BASE_MODEL_PATH",
+    str(Path(__file__).resolve().parents[2] / "models")  # fallback local
+)
+
+required = [
+    "wavlm_finetuned_v5.pt",
+    "bert_finetuned_v5.pt",
+    "model_0_best-v7.pt",
+    "scalers_v7.pkl",
+]
+missing = [f for f in required if not Path(BASE_MODEL_PATH, f).exists()]
+if missing:
+    print(f"[WARN] Missing model files in {BASE_MODEL_PATH}: {missing}")
+    app.models_loaded = False
+else:
+    app.models_loaded = True
+
 
 app.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -100,34 +118,54 @@ class BERTWrapper(nn.Module):
 
 print("[*] Démarrage du serveur AI...")
 
-try:
-    app.whisper_processor = WhisperProcessor.from_pretrained("distil-whisper/distil-medium.en")
-    app.whisper_model = WhisperForConditionalGeneration.from_pretrained("distil-whisper/distil-medium.en").to(app.device)
-    
-    wavlm_base = AutoModel.from_pretrained("microsoft/wavlm-base-plus")
-    app.wavlm_model = WavLMWrapper(wavlm_base).to(app.device)
-    app.wavlm_model.load_state_dict(torch.load(os.path.join(BASE_MODEL_PATH, 'wavlm_finetuned_v5.pt'), map_location=app.device), strict=False)
-    
-    bert_base = AutoModel.from_pretrained("bert-base-uncased")
-    app.bert_tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-    app.bert_model = BERTWrapper(bert_base).to(app.device)
-    app.bert_model.load_state_dict(torch.load(os.path.join(BASE_MODEL_PATH, 'bert_finetuned_v5.pt'), map_location=app.device), strict=False)
+if app.models_loaded:
+    try:
+        app.whisper_processor = WhisperProcessor.from_pretrained("distil-whisper/distil-medium.en")
+        app.whisper_model = WhisperForConditionalGeneration.from_pretrained("distil-whisper/distil-medium.en").to(app.device)
+        
+        wavlm_base = AutoModel.from_pretrained("microsoft/wavlm-base-plus")
+        app.wavlm_model = WavLMWrapper(wavlm_base).to(app.device)
+        app.wavlm_model.load_state_dict(torch.load(os.path.join(BASE_MODEL_PATH, 'wavlm_finetuned_v5.pt'), map_location=app.device), strict=False)
+        
+        bert_base = AutoModel.from_pretrained("bert-base-uncased")
+        app.bert_tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+        app.bert_model = BERTWrapper(bert_base).to(app.device)
+        app.bert_model.load_state_dict(torch.load(os.path.join(BASE_MODEL_PATH, 'bert_finetuned_v5.pt'), map_location=app.device), strict=False)
 
-    app.mtl_model = MTLModelV7(input_dim=2392).to(app.device)
-    checkpoint = torch.load(os.path.join(BASE_MODEL_PATH, 'model_0_best-v7.pt'), map_location=app.device)
-    app.mtl_model.load_state_dict(checkpoint.get('model_state_dict', checkpoint), strict=False)
-    app.mtl_model.eval()
-    
-    with open(os.path.join(BASE_MODEL_PATH, 'scalers_v7.pkl'), 'rb') as f:
-        app.scalers = pickle.load(f)
+        app.mtl_model = MTLModelV7(input_dim=2392).to(app.device)
+        checkpoint = torch.load(os.path.join(BASE_MODEL_PATH, 'model_0_best-v7.pt'), map_location=app.device)
+        app.mtl_model.load_state_dict(checkpoint.get('model_state_dict', checkpoint), strict=False)
+        app.mtl_model.eval()
+        
+        with open(os.path.join(BASE_MODEL_PATH, 'scalers_v7.pkl'), 'rb') as f:
+            app.scalers = pickle.load(f)
 
-    print("[OK] Modèles chargés.")
-except Exception as e:
-    print(f"[ERROR] Échec chargement: {e}")
+        app.models_loaded = True
+        print("[OK] Modèles chargés.")
+    except Exception as e:
+        app.models_loaded = False
+        print(f"[ERROR] Échec chargement: {e}")
+else:
+    print("[WARN] Modèles manquants — chargement ignoré. La route /predict ne sera pas disponible.")
 
-from routes.predict import predict_bp
-app.register_blueprint(predict_bp)
+if app.models_loaded:
+    try:
+        from routes.predict import predict_bp
+        app.register_blueprint(predict_bp)
+        print("[OK] Route /predict enregistree")
+    except Exception as e:
+        app.models_loaded = False
+        print(f"[ERROR] Impossible d'importer routes.predict: {e}")
+else:
+    print("[INFO] Route /predict non disponible - modeles ML non charges")
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    upload_folder = app.config.get('UPLOAD_FOLDER', 'uploads')
+    if not os.path.exists(upload_folder):
+        os.makedirs(upload_folder, exist_ok=True)
+    port = int(os.environ.get('PORT', 7860))
+    host = '0.0.0.0'
+    print(f"\n[OK] Serveur Flask pret sur http://{host}:{port}")
+    debug = os.environ.get("FLASK_DEBUG", "0") == "1"
+    app.run(host=host, port=port, debug=debug, use_reloader=debug)
 

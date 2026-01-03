@@ -23,7 +23,10 @@ WORKDIR /app/App/backend
 # Variables d'environnement utiles
 ENV BASE_MODEL_PATH=/app/models
 ENV UPLOAD_FOLDER=/app/uploads
+# Default PORT expected by Hugging Face Spaces; HF will provide $PORT at runtime.
+ENV PORT=7860
 
-EXPOSE 5000
+# EXPOSE is ignored by HF but kept for clarity
+EXPOSE 7860
 
 CMD ["python", "app.py"]

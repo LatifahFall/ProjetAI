@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, Square, Upload, Trash2, Send, FileAudio, Sparkles, Activity, UserPlus, Search, X } from 'lucide-react';
+import { Mic, Square, Upload, Trash2, Send, FileAudio, Sparkles, UserPlus, Search, ArrowLeft, Building2, MapPin, Briefcase } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { supabase } from '../lib/supabaseClient';
@@ -16,21 +16,24 @@ const CapturePage = () => {
   const [timer, setTimer] = useState(0);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  // --- ÉTATS CLIENTS (SUPABASE) ---
+  // --- ÉTATS CLIENTS ---
   const [showClientModal, setShowClientModal] = useState(false);
   const [searchClient, setSearchClient] = useState("");
   const [selectedClient, setSelectedClient] = useState(null);
   const [clients, setClients] = useState([]);
-  const [newClient, setNewClient] = useState({ nom: '', email: '', telephone: '' });
-
+  const [newClient, setNewClient] = useState({ 
+    nom: '', 
+    email: '', 
+    telephone: '',
+    company_name: '',
+    industry: '',
+    location: ''
+  });
 
   useEffect(() => {
-    if (!agentId) {
-      window.location.href = "/login";
-    }
-  }, [agentId]);
+    if (!agentId) navigate("/login");
+  }, [agentId, navigate]);
 
-  // 1. Charger les clients au démarrage
   useEffect(() => {
     fetchClients();
   }, [agentId]);
@@ -81,7 +84,7 @@ const CapturePage = () => {
       };
       mediaRecorderRef.current.start();
       setIsRecording(true);
-    } catch (err) { alert("Accès micro refusé"); }
+    } catch (err) { console.error("Micro refusé"); }
   };
 
   const stopRecording = () => {
@@ -92,7 +95,7 @@ const CapturePage = () => {
     }
   };
 
-  // --- LOGIQUE CLIENT SUPABASE ---
+  // --- LOGIQUE CRÉATION CLIENT ---
   const handleCreateClient = async (e) => {
     e.preventDefault();
     if (!newClient.nom || !agentId) return;
@@ -100,144 +103,95 @@ const CapturePage = () => {
     try {
       const { data, error } = await supabase
         .from('clients')
-        .insert([{
-          nom: newClient.nom,
-          email: newClient.email,
-          telephone: newClient.telephone,
-          agent_id: agentId
-        }])
-        .select()
-        .single();
+        .insert([{ ...newClient, agent_id: agentId }])
+        .select().single();
 
       if (error) throw error;
       setClients([...clients, data]);
       setSelectedClient(data);
       setSearchClient(data.nom);
       setShowClientModal(false);
-      setNewClient({ nom: '', email: '', telephone: '' });
+      setNewClient({ nom: '', email: '', telephone: '', company_name: '', industry: '', location: '' });
     } catch (error) {
-      alert("Erreur Supabase : " + error.message);
+      console.error(error.message);
     }
   };
 
   // --- ENVOI AU BACKEND (FLASK) ---
   const sendToBackend = async () => {
-  if (!selectedClient) {
-    alert("Veuillez sélectionner un client");
-    return;
-  }
+    if (!selectedClient || !fileToUpload) return;
 
-  if (!fileToUpload) {
-    alert("Veuillez capturer ou importer un audio");
-    return;
-  }
+    setIsAnalyzing(true);
+    const formData = new FormData();
+    formData.append("audio_file", fileToUpload, "capture_audio.wav");
 
-  if (!agentId) {
-    alert("Agent non connecté");
-    return;
-  }
+    try {
+      const response = await axios.post("http://127.0.0.1:5000/predict", formData);
 
-  setIsAnalyzing(true);
+      const { error } = await supabase.from("analyses").insert([
+        {
+          client_id: selectedClient.id,
+          transcription: response.data.transcription,
+          score_o: response.data.traits.Openness,
+          score_c: response.data.traits.Conscientiousness,
+          score_e: response.data.traits.Extraversion,
+          score_a: response.data.traits.Agreeableness,
+          score_n: response.data.traits.Neuroticism,
+          commentaire_ia: "Analyse multimodale automatique"
+        }
+      ]);
 
-  const formData = new FormData();
-  formData.append("audio_file", fileToUpload, "capture_audio.wav");
-
-  try {
-    // 1️⃣ Appel IA (Flask)
-    const response = await axios.post(
-      "http://127.0.0.1:5000/predict",
-      formData,
-      { headers: { "Content-Type": "multipart/form-data" } }
-    );
-
-    console.log("Réponse Backend:", response.data);
-
-    // 2️⃣ ENREGISTREMENT DANS SUPABASE ✅
-   const { error } = await supabase.from("analyses").insert([
-  {
-    client_id: selectedClient.id,
-    transcription: response.data.transcription,
-
-    score_o: response.data.traits.Openness,
-    score_c: response.data.traits.Conscientiousness,
-    score_e: response.data.traits.Extraversion,
-    score_a: response.data.traits.Agreeableness,
-    score_n: response.data.traits.Neuroticism,
-
-    commentaire_ia: "Analyse automatique"
-  }
-]);
-    if (error) {
-      console.error("❌ Erreur insertion analyses :", error.message);
-      alert("Erreur lors de l'enregistrement de l'analyse");
-      return;
-    }
-
-    if (error) {
-      console.error("Erreur Supabase :", error);
-      alert("❌ Supabase: " + error.message);
-      return;
-    }
-
-
-    alert("✅ Analyse enregistrée avec succès !");
-    navigate("/stats");
+      if (error) throw error;
+      navigate("/stats");
     } catch (error) {
-      console.error("Erreur globale :", error);
-      alert("❌ Erreur lors de l'analyse");
+      console.error("Analyse échouée", error);
     } finally {
       setIsAnalyzing(false);
     }
-};
-
+  };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-6 font-sans relative overflow-hidden bg-[#fdfeff]">
+    <div className="min-h-screen w-full flex items-center justify-center p-6 relative overflow-hidden bg-gray-50">
       
-      {/* BACKGROUND DESIGN */}
-      <div className="absolute inset-0 z-0">
-        <motion.div animate={{ x: [0, 30, 0], y: [0, 50, 0] }} transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-          className="absolute top-[-10%] left-[-5%] w-[40%] h-[40%] bg-indigo-200/40 rounded-full blur-[120px]" />
-        <motion.div animate={{ x: [0, -40, 0], y: [0, -60, 0] }} transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
-          className="absolute bottom-[-10%] right-[-5%] w-[45%] h-[45%] bg-blue-100/60 rounded-full blur-[120px]" />
+      {/* Background decoration */}
+      <div className="absolute top-8 left-8 z-20">
+        <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2 text-sm font-bold text-gray-400 hover:text-indigo-600 transition-colors">
+          <ArrowLeft size={18} /> Dashboard
+        </button>
       </div>
 
-      <div className="absolute inset-0 z-[1] opacity-[0.03] pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
-
-      <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}
-        className="relative z-10 bg-white/80 backdrop-blur-2xl w-full max-w-xl rounded-[3.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.08)] p-12 border border-white/40"
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+        className="relative z-10 bg-white w-full max-w-xl rounded-[3rem] shadow-2xl p-10 border border-gray-100"
       >
-        <header className="text-center mb-12 relative">
-          <div className="inline-flex p-3 bg-indigo-50/50 rounded-2xl mb-4 text-indigo-600 border border-indigo-100/50">
+        <header className="text-center mb-10">
+          <div className="inline-flex p-3 bg-indigo-50 rounded-2xl mb-4 text-indigo-600">
             <Sparkles size={24} />
           </div>
-          <h1 className="text-4xl font-black text-slate-900 tracking-tight">Analyse IA</h1>
-          <p className="text-slate-500 mt-2 font-medium">Capturez et analysez la voix du client</p>
+          <h1 className="text-3xl font-black text-gray-900">Nouvelle Analyse</h1>
+          <p className="text-gray-400 font-medium">Enregistrez ou importez la voix du client</p>
         </header>
 
         <AnimatePresence mode="wait">
           {!audioSource ? (
-            <motion.div key="input" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-10">
-              <div className="flex flex-col items-center justify-center">
+            <motion.div key="input" className="space-y-8">
+              <div className="flex flex-col items-center">
                 <div className="relative">
-                  {isRecording && <motion.div animate={{ scale: [1, 2], opacity: [0.4, 0] }} transition={{ repeat: Infinity, duration: 1.5 }} className="absolute inset-0 bg-red-200 rounded-full" />}
+                  {isRecording && <motion.div animate={{ scale: [1, 1.8], opacity: [0.3, 0] }} transition={{ repeat: Infinity, duration: 1.5 }} className="absolute inset-0 bg-red-100 rounded-full" />}
                   <button onClick={isRecording ? stopRecording : startRecording}
-                    className={`relative z-10 w-24 h-24 rounded-full flex items-center justify-center transition-all shadow-lg ${
-                      isRecording ? 'bg-red-500 text-white shadow-red-200' : 'bg-indigo-600 text-white shadow-indigo-200 hover:scale-105'
+                    className={`relative z-10 w-24 h-24 rounded-full flex items-center justify-center transition-all ${
+                      isRecording ? 'bg-red-500 text-white shadow-xl shadow-red-200' : 'bg-indigo-600 text-white shadow-xl shadow-indigo-100 hover:scale-105'
                     }`}>
-                    {isRecording ? <Square fill="currentColor" size={28} /> : <Mic size={36} />}
+                    {isRecording ? <Square fill="currentColor" size={24} /> : <Mic size={32} />}
                   </button>
                 </div>
-                <div className="mt-6 text-center">
-                  <span className={`text-3xl font-black tabular-nums tracking-tighter ${isRecording ? 'text-red-500' : 'text-slate-300'}`}>
-                    {isRecording ? formatTime(timer) : "0:00"}
-                  </span>
-                </div>
+                <span className={`mt-6 text-3xl font-black tabular-nums ${isRecording ? 'text-red-500' : 'text-gray-200'}`}>
+                  {isRecording ? formatTime(timer) : "0:00"}
+                </span>
               </div>
 
-              <label className="flex flex-col items-center justify-center h-28 border-2 border-dashed border-slate-200 rounded-[2.5rem] cursor-pointer hover:bg-white/50 hover:border-indigo-300 transition-all group">
-                <Upload size={24} className="text-slate-300 group-hover:text-indigo-500 mb-2 transition-colors" />
-                <span className="text-slate-400 font-bold text-xs uppercase tracking-widest">Importer un fichier</span>
+              <label className="flex flex-col items-center justify-center h-24 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:bg-gray-50 transition-all">
+                <Upload size={20} className="text-gray-300 mb-1" />
+                <span className="text-gray-400 font-bold text-[10px] uppercase tracking-widest">Importer Audio</span>
                 <input type="file" className="hidden" accept="audio/*" onChange={(e) => {
                   const f = e.target.files[0];
                   if(f){ setFileToUpload(f); setAudioSource(URL.createObjectURL(f)); }
@@ -245,87 +199,95 @@ const CapturePage = () => {
               </label>
             </motion.div>
           ) : (
-            <motion.div key="preview" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-6">
-              
-              <div className="bg-slate-50/50 p-6 rounded-[2.5rem] border border-slate-100 space-y-4 shadow-inner">
-                <div className="flex items-center justify-between px-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Client</label>
-                  <button onClick={() => setShowClientModal(true)} className="flex items-center gap-1 text-[10px] font-black text-indigo-600 uppercase hover:underline">
+            <motion.div key="preview" className="space-y-6">
+              <div className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100 space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Sélection Client</label>
+                  <button onClick={() => setShowClientModal(true)} className="text-[10px] font-black text-indigo-600 flex items-center gap-1 uppercase hover:underline">
                     <UserPlus size={12} /> Nouveau
                   </button>
                 </div>
-
-                <div className="relative group">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-indigo-500 pointer-events-none">
-                    <Search size={18} />
-                  </div>
-                  <input type="text" placeholder="Chercher un client..." value={searchClient}
+                <div className="relative">
+                  <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" />
+                  <input type="text" placeholder="Rechercher..." value={searchClient}
                     onChange={(e) => {setSearchClient(e.target.value); setSelectedClient(null);}}
-                    className="w-full pl-12 pr-4 py-4 bg-white rounded-2xl border border-slate-100 focus:border-indigo-300 outline-none transition-all font-medium text-slate-700 shadow-sm"
+                    className="w-full pl-10 pr-4 py-4 bg-white rounded-xl border border-gray-100 focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-gray-700"
                   />
-                  
                   {searchClient && !selectedClient && (
-                    <div className="absolute z-50 w-full mt-2 bg-white rounded-2xl shadow-xl border border-slate-100 max-h-40 overflow-y-auto p-2">
-                      {filteredClients.length > 0 ? filteredClients.map(c => (
+                    <div className="absolute z-50 w-full mt-2 bg-white rounded-xl shadow-xl border border-gray-100 max-h-40 overflow-y-auto">
+                      {filteredClients.map(c => (
                         <button key={c.id} onClick={() => {setSelectedClient(c); setSearchClient(c.nom);}}
-                          className="w-full text-left px-4 py-3 hover:bg-indigo-50 rounded-xl transition-colors font-bold text-slate-700 text-sm flex justify-between">
+                          className="w-full text-left px-4 py-3 hover:bg-indigo-50 font-bold text-gray-700 text-sm">
                           {c.nom}
                         </button>
-                      )) : (
-                        <p className="p-4 text-[10px] text-slate-400 text-center font-bold">Aucun résultat</p>
-                      )}
+                      ))}
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="bg-white/50 p-6 rounded-[2.5rem] border border-white shadow-inner">
-                <div className="flex items-center justify-between mb-4">
-                   <div className="flex items-center gap-3">
-                     <div className="bg-indigo-600 p-2 rounded-xl text-white shadow-lg"><FileAudio size={18} /></div>
-                     <span className="text-xs font-black text-slate-900 uppercase">Aperçu Audio</span>
-                   </div>
-                   <button onClick={() => {setAudioSource(null); setFileToUpload(null);}} className="text-slate-300 hover:text-red-500"><Trash2 size={18} /></button>
+              <div className="bg-gray-50 p-4 rounded-[2rem] border border-gray-100">
+                <div className="flex justify-between items-center mb-2 px-2">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Lecteur Audio</span>
+                    <button onClick={() => {setAudioSource(null); setFileToUpload(null);}} className="text-red-400 hover:text-red-600"><Trash2 size={16}/></button>
                 </div>
-                <audio src={audioSource} controls className="w-full mb-2" />
+                <audio src={audioSource} controls className="w-full" />
               </div>
 
               <button disabled={isAnalyzing || !selectedClient} onClick={sendToBackend}
-                className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black flex items-center justify-center gap-3 hover:bg-black transition-all shadow-xl disabled:bg-slate-200"
+                className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black flex items-center justify-center gap-3 hover:bg-indigo-700 transition-all disabled:bg-gray-200"
               >
-                {isAnalyzing ? (
-                  <div className="flex items-center gap-2">
-                    <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} className="h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
-                    Traitement...
-                  </div>
-                ) : (
-                  <><Send size={18} /> Lancer l'analyse pour {selectedClient?.nom}</>
-                )}
+                {isAnalyzing ? "Traitement IA en cours..." : "Lancer l'analyse"}
               </button>
             </motion.div>
           )}
         </AnimatePresence>
       </motion.div>
 
-      {/* --- MODALE AJOUT CLIENT --- */}
+      {/* --- MODALE CLIENT AVEC LES NOUVEAUX CHAMPS --- */}
       <AnimatePresence>
         {showClientModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowClientModal(false)} className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm" />
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/20 backdrop-blur-sm">
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-              className="relative bg-white w-full max-w-md rounded-[3rem] p-10 shadow-2xl"
+              className="bg-white w-full max-w-lg rounded-[2.5rem] p-8 shadow-2xl overflow-y-auto max-h-[90vh]"
             >
-              <h2 className="text-2xl font-black text-slate-900 mb-8">Nouveau Client</h2>
+              <h2 className="text-2xl font-black text-gray-900 mb-6">Nouveau Profil Client</h2>
               <form onSubmit={handleCreateClient} className="space-y-4">
-                <input required type="text" value={newClient.nom} onChange={(e) => setNewClient({...newClient, nom: e.target.value})} placeholder="Nom complet"
-                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none focus:border-indigo-300 font-bold" />
-                <input type="email" value={newClient.email} onChange={(e) => setNewClient({...newClient, email: e.target.value})} placeholder="Email"
-                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none focus:border-indigo-300 font-bold" />
-                <input type="tel" value={newClient.telephone} onChange={(e) => setNewClient({...newClient, telephone: e.target.value})} placeholder="Téléphone"
-                  className="w-full px-6 py-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none focus:border-indigo-300 font-bold" />
-                <button type="submit" className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-all">
-                  Créer et Sélectionner
-                </button>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Nom complet *</label>
+                    <input required type="text" value={newClient.nom} onChange={(e) => setNewClient({...newClient, nom: e.target.value})} className="w-full px-5 py-3 bg-gray-50 rounded-xl border-none outline-none focus:ring-2 focus:ring-indigo-500 font-bold" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Email</label>
+                    <input type="email" value={newClient.email} onChange={(e) => setNewClient({...newClient, email: e.target.value})} className="w-full px-5 py-3 bg-gray-50 rounded-xl border-none outline-none focus:ring-2 focus:ring-indigo-500 font-bold" />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase ml-1">Téléphone</label>
+                    <input type="tel" value={newClient.telephone} onChange={(e) => setNewClient({...newClient, telephone: e.target.value})} className="w-full px-5 py-3 bg-gray-50 rounded-xl border-none outline-none focus:ring-2 focus:ring-indigo-500 font-bold" />
+                </div>
+
+                <div className="pt-2 border-t border-gray-100 space-y-4">
+                    <div className="relative">
+                        <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={18} />
+                        <input type="text" placeholder="Nom de l'entreprise" value={newClient.company_name} onChange={(e) => setNewClient({...newClient, company_name: e.target.value})} className="w-full pl-12 pr-5 py-4 bg-gray-50 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" />
+                    </div>
+                    <div className="relative">
+                        <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={18} />
+                        <input type="text" placeholder="Secteur d'activité" value={newClient.industry} onChange={(e) => setNewClient({...newClient, industry: e.target.value})} className="w-full pl-12 pr-5 py-4 bg-gray-50 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" />
+                    </div>
+                    <div className="relative">
+                        <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={18} />
+                        <input type="text" placeholder="Localisation" value={newClient.location} onChange={(e) => setNewClient({...newClient, location: e.target.value})} className="w-full pl-12 pr-5 py-4 bg-gray-50 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold" />
+                    </div>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button type="button" onClick={() => setShowClientModal(false)} className="flex-1 py-4 bg-gray-100 text-gray-500 rounded-xl font-black">Annuler</button>
+                  <button type="submit" className="flex-1 py-4 bg-indigo-600 text-white rounded-xl font-black shadow-lg">Créer Profil</button>
+                </div>
               </form>
             </motion.div>
           </div>

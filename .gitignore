@@ -24,15 +24,8 @@ wheels/
 .installed.cfg
 *.egg
 
-# Modèles et données
-models/*.pt
-models/*.pkl
-models/*.pth
-models/*.h5
-models/*.onnx
-*.pkl
-*.pt
-*.pth
+# Les modèles sont versionnés via Git LFS (PAS ignorés)
+# models/*
 
 # MLflow
 mlartifacts/
